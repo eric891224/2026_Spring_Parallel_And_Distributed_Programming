@@ -1,0 +1,5 @@
+.vscode/
+
+spmv_not_csr
+spmv_serial
+spmv_openmp
