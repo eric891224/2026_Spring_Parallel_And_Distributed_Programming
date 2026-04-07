@@ -64,8 +64,21 @@ void compute_not_csr(int M, int N, int nnz, int *rows, int *cols, double *vals, 
     /* STUDENT TASK: implement naive COO-scan that computes y = A*x
        Example pseudo: for each k in [0,nnz): y[rows[k]] += vals[k] * x[cols[k]];
     */
-    fprintf(stderr, "[STUDENT] compute_not_csr() not implemented — fill this in.\n");
-    for (int i=0;i<M;i++) y[i]=0.0;
+    // efficient implementation of COO-scan
+    // for (int i=0; i<M; i++) y[i] = 0.0;
+    // for (int k=0; k<nnz; k++) {
+    //     y[rows[k]] += vals[k] * x[cols[k]];
+    // }
+
+    // slower implementation of COO-scan
+    for (int i=0; i<M; i++) {
+        y[i] = 0.0;
+        for (int k=0; k<nnz; k++) {
+            if (rows[k] == i) {
+                y[i] += vals[k] * x[cols[k]];
+            }
+        }
+    }
 }
 
 int main(int argc, char **argv) {
