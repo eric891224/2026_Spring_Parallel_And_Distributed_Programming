@@ -9,7 +9,7 @@
 - `test_not_csr.sh`: helper script to run `spmv_not_csr` with testcase files
 - `test_serial.sh`: helper script to run `spmv_serial` with testcase files
 - `test_openmp.sh`: helper script to run `spmv_openmp` with fixed `OMP_NUM_THREADS=16`
-- `benchmark_openmp.sh`: benchmark OpenMP schedules/chunks on one or all testcases
+- `benchmark_openmp.sh`: benchmark OpenMP schedules/chunks on one or all testcases with configurable thread count
 
 ## Build
 
@@ -101,7 +101,26 @@ bash test_openmp.sh huge_200k_100
 
 ## Benchmark OpenMP
 
-`benchmark_openmp.sh` benchmarks `spmv_openmp` using `OMP_SCHEDULE` while keeping `OMP_NUM_THREADS=16` fixed.
+`benchmark_openmp.sh` benchmarks `spmv_openmp` using `OMP_SCHEDULE`.
+
+Script arguments:
+
+```bash
+bash benchmark_openmp.sh [testcase_or_all] [repeats]
+```
+
+- `testcase_or_all`: testcase name, or `all` (default: `all`)
+- `repeats`: number of runs per config (default: `1`)
+
+Thread sweep is controlled like schedules/chunks via environment variable:
+
+```bash
+THREADS="1 2 4 8 16 32 64 128"
+```
+
+Default thread sweep is `1 2 4 8 16 32 64 128`.
+
+`benchmark_openmp.sh` applies each value as `OMP_NUM_THREADS` and adds an outer loop over thread counts.
 
 Run all testcases (all `*.mtx` in testcase root), 1 repeat:
 
@@ -113,6 +132,18 @@ Run one testcase with repeats:
 
 ```bash
 bash benchmark_openmp.sh huge_200k_100 3
+```
+
+Run one testcase with custom thread sweep:
+
+```bash
+THREADS="1 2 4 8 16" bash benchmark_openmp.sh huge_200k_100 3
+```
+
+Run all testcases with thread sweep from env var:
+
+```bash
+THREADS="8 16 32 64" bash benchmark_openmp.sh all 2
 ```
 
 Run all testcases with custom schedule/chunk sweep:

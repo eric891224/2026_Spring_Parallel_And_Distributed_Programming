@@ -5,10 +5,10 @@ set -uo pipefail
 TESTCASE_ROOT="/home/Team43/testcases_hw2"
 TESTCASE_SELECT="${1:-all}"
 REPEATS="${2:-1}"
-THREADS_FIXED=16
 
 # Override these from env when you want a custom sweep.
-# Example: SCHEDULES="static dynamic" CHUNKS="1 8 64" bash benchmark_openmp.sh huge_200k_100 3
+# Example: THREADS="1 2 4 8 16 32" SCHEDULES="static dynamic" CHUNKS="1 8 64" bash benchmark_openmp.sh huge_200k_100 3
+THREADS="${THREADS:-1 2 4 8 16 32 64 128}"
 SCHEDULES="${SCHEDULES:-static dynamic guided}"
 CHUNKS="${CHUNKS:-1 2 4 8 16 32 64 128 256 512 1024 2048 4096}"
 LOG_DIR="${LOG_DIR:-benchmark_logs}"
@@ -58,8 +58,22 @@ fi
 
 read -r -a SCHEDULE_ARR <<< "$SCHEDULES"
 read -r -a CHUNK_ARR <<< "$CHUNKS"
+read -r -a THREAD_ARR <<< "$THREADS"
+
+if [[ "${#THREAD_ARR[@]}" -eq 0 ]]; then
+    echo "Error: THREADS list is empty"
+    exit 1
+fi
+
+for thread_count in "${THREAD_ARR[@]}"; do
+    if ! [[ "$thread_count" =~ ^[0-9]+$ ]] || [[ "$thread_count" -lt 1 ]]; then
+        echo "Error: invalid thread count in THREADS list: $thread_count"
+        exit 1
+    fi
+done
 
 W_TESTCASE=20
+W_THREADS=7
 W_SCHEDULE=8
 W_CHUNK=5
 W_RUN=3
@@ -75,6 +89,12 @@ done
 for sched in "${SCHEDULE_ARR[@]}"; do
     if (( ${#sched} > W_SCHEDULE )); then
         W_SCHEDULE=${#sched}
+    fi
+done
+
+for thread_count in "${THREAD_ARR[@]}"; do
+    if (( ${#thread_count} > W_THREADS )); then
+        W_THREADS=${#thread_count}
     fi
 done
 
@@ -108,18 +128,19 @@ echo "Running OpenMP benchmark"
 echo "  testcase select: $TESTCASE_SELECT"
 echo "  testcase root:   $TESTCASE_ROOT"
 echo "  testcase count:  ${#VALID_TESTCASE_ARR[@]}"
-echo "  threads:  $THREADS_FIXED"
+echo "  thread count list: ${#THREAD_ARR[@]} values (${THREAD_ARR[0]}..${THREAD_ARR[${#THREAD_ARR[@]}-1]})"
 echo "  repeats:  $REPEATS"
 echo "  schedules: ${SCHEDULE_ARR[*]}"
 echo "  chunks:    ${CHUNK_ARR[*]}"
 echo "  csv:      $CSV_PATH"
 echo
 
-SEP_LINE="+-$(repeat_char '-' "$W_TESTCASE")-+-$(repeat_char '-' "$W_SCHEDULE")-+-$(repeat_char '-' "$W_CHUNK")-+-$(repeat_char '-' "$W_RUN")-+-$(repeat_char '-' "$W_TIME")-+-$(repeat_char '-' "$W_CHECK")-+"
+SEP_LINE="+-$(repeat_char '-' "$W_TESTCASE")-+-$(repeat_char '-' "$W_THREADS")-+-$(repeat_char '-' "$W_SCHEDULE")-+-$(repeat_char '-' "$W_CHUNK")-+-$(repeat_char '-' "$W_RUN")-+-$(repeat_char '-' "$W_TIME")-+-$(repeat_char '-' "$W_CHECK")-+"
 
 echo "$SEP_LINE"
-printf "| %-*s | %-*s | %*s | %*s | %*s | %-*s |\n" \
+printf "| %-*s | %*s | %-*s | %*s | %*s | %*s | %-*s |\n" \
     "$W_TESTCASE" "testcase" \
+    "$W_THREADS" "threads" \
     "$W_SCHEDULE" "schedule" \
     "$W_CHUNK" "chunk" \
     "$W_RUN" "run" \
@@ -130,35 +151,38 @@ echo "$SEP_LINE"
 for testcase_name in "${VALID_TESTCASE_ARR[@]}"; do
     mtx_path="$TESTCASE_ROOT/$testcase_name.mtx"
     vec_path="$TESTCASE_ROOT/$testcase_name.vec"
-    for sched in "${SCHEDULE_ARR[@]}"; do
-        for chunk in "${CHUNK_ARR[@]}"; do
-            for ((run=1; run<=REPEATS; run++)); do
-                output=""
-                if output=$(OMP_NUM_THREADS="$THREADS_FIXED" OMP_SCHEDULE="${sched},${chunk}" \
-                    ./spmv_openmp "$mtx_path" "$vec_path" 2>&1); then
-                    exit_code=0
-                else
-                    exit_code=$?
-                fi
+    for thread_count in "${THREAD_ARR[@]}"; do
+        for sched in "${SCHEDULE_ARR[@]}"; do
+            for chunk in "${CHUNK_ARR[@]}"; do
+                for ((run=1; run<=REPEATS; run++)); do
+                    output=""
+                    if output=$(OMP_NUM_THREADS="$thread_count" OMP_SCHEDULE="${sched},${chunk}" \
+                        ./spmv_openmp "$mtx_path" "$vec_path" 2>&1); then
+                        exit_code=0
+                    else
+                        exit_code=$?
+                    fi
 
-                time_ms=$(echo "$output" | sed -n 's/.*spmv_openmp_time_ms=\([0-9.]*\).*/\1/p' | tail -n1)
-                verify=$(echo "$output" | grep -Eo 'OK|WRONG' | tail -n1)
+                    time_ms=$(echo "$output" | sed -n 's/.*spmv_openmp_time_ms=\([0-9.]*\).*/\1/p' | tail -n1)
+                    verify=$(echo "$output" | grep -Eo 'OK|WRONG' | tail -n1)
 
-                if [[ -z "$time_ms" ]]; then
-                    time_ms="NA"
-                fi
-                if [[ -z "$verify" ]]; then
-                    verify="NA"
-                fi
+                    if [[ -z "$time_ms" ]]; then
+                        time_ms="NA"
+                    fi
+                    if [[ -z "$verify" ]]; then
+                        verify="NA"
+                    fi
 
-                echo "$testcase_name,$THREADS_FIXED,$sched,$chunk,$run,$time_ms,$verify,$exit_code" >> "$CSV_PATH"
-                printf "| %-*s | %-*s | %*s | %*s | %*s | %-*s |\n" \
-                    "$W_TESTCASE" "$testcase_name" \
-                    "$W_SCHEDULE" "$sched" \
-                    "$W_CHUNK" "$chunk" \
-                    "$W_RUN" "$run" \
-                    "$W_TIME" "$time_ms" \
-                    "$W_CHECK" "$verify"
+                    echo "$testcase_name,$thread_count,$sched,$chunk,$run,$time_ms,$verify,$exit_code" >> "$CSV_PATH"
+                    printf "| %-*s | %*s | %-*s | %*s | %*s | %*s | %-*s |\n" \
+                        "$W_TESTCASE" "$testcase_name" \
+                        "$W_THREADS" "$thread_count" \
+                        "$W_SCHEDULE" "$sched" \
+                        "$W_CHUNK" "$chunk" \
+                        "$W_RUN" "$run" \
+                        "$W_TIME" "$time_ms" \
+                        "$W_CHECK" "$verify"
+                done
             done
         done
     done
