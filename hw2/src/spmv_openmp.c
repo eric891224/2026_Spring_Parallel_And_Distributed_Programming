@@ -42,14 +42,41 @@ int verify(int M, double *y, double *ygold) { double tol=0.02; for(int i=0;i<M;i
 /* TODO: Student implements CSR builder. Provide row_ptr, col_idx, vals_csr arrays. */
 void build_csr(int M, int N, int nnz, int *rows, int *cols, double *vals,
                int **row_ptr, int **col_idx, double **vals_csr) {
-    fprintf(stderr, "[STUDENT] build_csr() not implemented — fill this in.\n");
+    // fprintf(stderr, "[STUDENT] build_csr() not implemented — fill this in.\n");
     *row_ptr = calloc(M+1, sizeof(int)); *col_idx = malloc(sizeof(int)*nnz); *vals_csr = malloc(sizeof(double)*nnz);
+    // record row counts in row_ptr (run prefix sum later)
+    for (int k=0; k<nnz; k++) {
+        int row = rows[k];
+        (*row_ptr)[row+1]++;
+    }
+    // prefix sum to get row_ptr
+    for (int i=0; i<M; i++) {
+        (*row_ptr)[i+1] += (*row_ptr)[i];
+    }
+    // fill col_idx and vals_csr
+    // copy row_ptr to a temp array to track insertion points
+    int *temp_row_ptr = malloc(sizeof(int)*(M+1));
+    memcpy(temp_row_ptr, *row_ptr, sizeof(int)*(M+1));
+    for (int k=0; k<nnz; k++) {
+        int row = rows[k];
+        int dest = temp_row_ptr[row];
+        (*col_idx)[dest] = cols[k];
+        (*vals_csr)[dest] = vals[k];
+        temp_row_ptr[row]++;
+    }
+    free(temp_row_ptr);
 }
 
 /* TODO: Student implements OpenMP-parallel CSR SpMV. Current stub zeroes y. */
 void spmv_csr_openmp(int M, int *row_ptr, int *col_idx, double *vals_csr, double *x, double *y) {
-    fprintf(stderr, "[STUDENT] spmv_csr_openmp() not implemented — fill this in.\n");
+    // fprintf(stderr, "[STUDENT] spmv_csr_openmp() not implemented — fill this in.\n");
     for (int i=0;i<M;i++) y[i]=0.0;
+    #pragma omp parallel for schedule(runtime) // schedule(static, 1)
+    for (int i=0; i<M; i++) {
+        for (int j=row_ptr[i]; j<row_ptr[i+1]; j++) {
+            y[i] += vals_csr[j] * x[col_idx[j]];
+        }
+    }
 }
 
 int main(int argc, char **argv) {

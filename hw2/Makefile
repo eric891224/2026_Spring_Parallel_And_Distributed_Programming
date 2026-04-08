@@ -13,5 +13,6 @@ spmv_not_csr: $(SRC_DIR)/spmv_not_csr.c
 
 clean:
 	rm -f spmv_openmp spmv_serial spmv_not_csr
+	rm -rf benchmark_logs
 
 .PHONY: all clean
