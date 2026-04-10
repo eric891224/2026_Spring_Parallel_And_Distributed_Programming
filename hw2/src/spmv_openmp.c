@@ -71,7 +71,7 @@ void build_csr(int M, int N, int nnz, int *rows, int *cols, double *vals,
 void spmv_csr_openmp(int M, int *row_ptr, int *col_idx, double *vals_csr, double *x, double *y) {
     // fprintf(stderr, "[STUDENT] spmv_csr_openmp() not implemented — fill this in.\n");
     for (int i=0;i<M;i++) y[i]=0.0;
-    #pragma omp parallel for schedule(runtime) // schedule(static, 1)
+    #pragma omp parallel for schedule(guided, 1) // schedule(runtime) 
     for (int i=0; i<M; i++) {
         for (int j=row_ptr[i]; j<row_ptr[i+1]; j++) {
             y[i] += vals_csr[j] * x[col_idx[j]];
